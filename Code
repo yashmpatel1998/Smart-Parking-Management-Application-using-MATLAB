@@ -1,0 +1,389 @@
+classdef finale_project_with_comment < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure                      matlab.ui.Figure
+        Knob                          matlab.ui.control.Knob
+        Lamp                          matlab.ui.control.Lamp
+        Lamp2                         matlab.ui.control.Lamp
+        Lamp3                         matlab.ui.control.Lamp
+        Switch                        matlab.ui.control.RockerSwitch
+        Switch2                       matlab.ui.control.RockerSwitch
+        Image                         matlab.ui.control.Image
+        WelcomeLabel                  matlab.ui.control.Label
+        MySmartParkingDashboardLabel  matlab.ui.control.Label
+        AvailablespotsLabel           matlab.ui.control.Label
+        AvailablespotsEditField       matlab.ui.control.NumericEditField
+        EnterLabel                    matlab.ui.control.Label
+        ExitLabel                     matlab.ui.control.Label
+        DatePickerLabel               matlab.ui.control.Label
+        DatePicker                    matlab.ui.control.DatePicker
+        Label_4                       matlab.ui.control.Label
+        ProjectGroupNo34Label         matlab.ui.control.Label
+    end
+
+    
+    properties (Access = private)
+          
+        a ;
+        servo ;
+        places ;
+        sw1; sw2;
+        acquisionTimer ;
+        MyTimer;
+        responces;
+        photos = {'c0.jpg','c1.jpg','c2.jpg','c3.jpg','c4.jpg','c5.jpg','c6.jpg','c7.jpg','c8.jpg','c9.jpg','c10.jpg','c11.jpg','c12.jpg','c13.jpg','c14.jpg'} ;
+     
+         
+    end
+    
+    
+   
+  
+    
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Code that executes after component creation
+        function startupFcn(app)
+            app.a = arduino(); %calling Arduino
+            app.servo = servo(app.a,'D9'); %calling servo moter
+            app.places = 6 ; % Available space at starting
+            app.sw1 = app.Switch.Value ;
+            app.sw2 = app.Switch2.Value ;
+            writePosition(app.servo,0) ;
+            app.Image.ImageSource = char(app.photos(15 - app.places  )) ;
+            app.Lamp2.Enable = 'off' ; %Yellow lamp off
+            app.Lamp3.Enable = 'off' ; % green lamp off
+                      
+            app.DatePicker.Value = datetime('today');  
+            app.AvailablespotsEditField.Value = app.places ;
+          
+            % push button timer
+            app.acquisionTimer = timer('startDelay',0,'period',0.25,'ExecutionMode',"fixedDelay");
+            app.acquisionTimer.TimerFcn = @(obj,event)acquisionCallback(app);
+            start(app.acquisionTimer);
+
+            
+            % Push button
+             function results = acquisionCallback(app)
+                 if (readDigitalPin (app.a,'D4') == 0 )
+                     if (app.places >= 1 )
+                       app.Lamp.Enable = 'off' ;
+                       
+                       writePosition(app.servo,0.5) ; % Arm open
+                       writeDigitalPin(app.a,'D5',1) ; % Green LED on
+                       % Blinking green Lamp and Switching between images
+                       for i= 1:20 
+                           app.Lamp3.Enable = 'on' ;
+                           app.Image.ImageSource = char(app.photos((15 - app.places) + 1 )  ) ;
+                           pause(0.5) ;
+                           
+                           app.Lamp3.Enable = 'off' ;
+                           app.Image.ImageSource = char(app.photos(15 - app.places)  );
+                           pause(0.25)
+                                                                             
+                       end
+                       app.Lamp.Enable = 'on' ; % red Lamp on
+                       
+                       writePosition(app.servo,0) ; % Arm closes
+                       writeDigitalPin(app.a,'D5',0) ; % Green LED off
+                       app.places = app.places - 1 ; % update available space
+                       pause(2) ;
+                       response = thingSpeakWrite(1108108,[app.places,10*rand(1)],"Fields",[1,2],"WriteKey",'HTU1J24KLH4O7D4I') ; % write data on thing speak 
+                                           
+                       app.AvailablespotsEditField.Value = app.places ; % display available spots 
+                       app.Image.ImageSource = char(app.photos(15 - app.places  )) ; 
+                       app.Switch.Value = app.sw1 ;
+                 else              
+                       app.Lamp.Enable = 'on' ;
+                       app.WelcomeLabel.Text = char('Please come back later') ; % display this if there is no available sport
+                                                               
+                     end
+            
+                 elseif (readDigitalPin(app.a,'D11') == 0 )
+                    if (app.places < 14 )
+                       app.Lamp.Enable = 'off' ;
+                       writePosition(app.servo,0.5) ;
+                       writeDigitalPin(app.a,'D5',1) ;
+                       for i= 1:20 
+                           
+                           app.Lamp3.Enable = 'on' ;
+                           app.Image.ImageSource = char(app.photos( 15 - app.places  )) ;
+                           pause(0.5) ;
+                           app.Lamp3.Enable = 'off' ;
+                           app.Image.ImageSource = char(app.photos(( 15 - app.places) - 1 )) ;
+                           pause(0.25)
+                                                                                
+                       end
+                       
+                       app.Lamp.Enable = 'on' ;
+                       
+                       writePosition(app.servo,0) ;
+                       writeDigitalPin(app.a,'D5',0) ;
+                       app.places = app.places + 1 ;
+                       pause(2) ;
+                        response = thingSpeakWrite(1108108,[app.places,10*rand(1)],"Fields",[1,2],"WriteKey",'HTU1J24KLH4O7D4I') ;
+                                          
+                       app.AvailablespotsEditField.Value = app.places ;
+                       app.Image.ImageSource = char(app.photos(15 - app.places) ) ;
+                       app.Switch2.Value = app.sw2 ;
+               
+                    end
+                 end                
+             end
+             
+            
+           
+
+        end
+
+        % Value changed function: Switch
+        function SwitchValueChanged(app, event)
+            value = app.Switch.Value; % Entry Switch
+            app.Lamp.Enable  = 'off' ; % red lamp off
+               writePosition(app.servo,0) ; 
+                            
+               if (app.places >= 1 )
+                       
+                       writePosition(app.servo,0.5) ; % Arm open
+                       writeDigitalPin(app.a,'D5',1) ; % Green LED on
+                       % Blinking green Lamp and Switching between images
+                       for i= 1:20 
+                           app.Lamp3.Enable = 'on' ;
+                           app.Image.ImageSource = char(app.photos((15 - app.places) + 1 )  ) ;
+                           pause(0.5) ;
+                           
+                           app.Lamp3.Enable = 'off' ;
+                           app.Image.ImageSource = char(app.photos(15 - app.places)  );
+                           pause(0.25)
+                                                                             
+                       end
+                       app.Lamp.Enable = 'on' ; % red Lamp on
+                       
+                       writePosition(app.servo,0) ; % Arm closes
+                       writeDigitalPin(app.a,'D5',0) ; % Green LED off
+                       app.places = app.places - 1 ; % update available space
+                       pause(2) ;
+                       response = thingSpeakWrite(1108108,[app.places,10*rand(1)],"Fields",[1,2],"WriteKey",'HTU1J24KLH4O7D4I') ; % write data on thing speak 
+                      
+                     
+                       app.AvailablespotsEditField.Value = app.places ; % display available spots 
+                       app.Image.ImageSource = char(app.photos(15 - app.places  )) ; 
+                       app.Switch.Value = app.sw1 ;
+               else
+                       app.Lamp.Enable = 'on' ;
+                       app.WelcomeLabel.Text = char('Please come back later') ; % display this if there is no available sport
+                                                               
+               end
+        end
+
+        % Value changed function: Switch2
+        function Switch2ValueChanged(app, event)
+            value = app.Switch2.Value; % Exite switch
+            app.Lamp.Enable  = 'off' ;
+              app.Lamp3.Enable = 'on' ;
+               writePosition(app.servo,0) ;
+               
+             
+               if (app.places < 14 )
+                       
+                       writePosition(app.servo,0.5) ;
+                       writeDigitalPin(app.a,'D5',1) ;
+                       for i= 1:20 
+                           
+                           app.Lamp3.Enable = 'on' ;
+                           app.Image.ImageSource = char(app.photos( 15 - app.places  )) ;
+                           pause(0.5) ;
+                           app.Lamp3.Enable = 'off' ;
+                           app.Image.ImageSource = char(app.photos(( 15 - app.places) - 1 )) ;
+                           pause(0.25)
+                                                                                
+                       end
+                       
+                       app.Lamp.Enable = 'on' ;
+                       
+                       writePosition(app.servo,0) ;
+                       writeDigitalPin(app.a,'D5',0) ;
+                       app.places = app.places + 1 ;
+                       pause(2) ;
+                        response = thingSpeakWrite(1108108,[app.places,10*rand(1)],"Fields",[1,2],"WriteKey",'HTU1J24KLH4O7D4I') ;
+                      
+                    
+                       app.AvailablespotsEditField.Value = app.places ;
+                       app.Image.ImageSource = char(app.photos(15 - app.places) ) ;
+                       app.Switch2.Value = app.sw2 ;
+              
+               end
+            
+        end
+
+        % Value changing function: Knob
+        function KnobValueChanging(app, event)
+            changingValue = round(event.Value,0) ;
+            app.Label_4.Text = char(string(changingValue)+'°') ; % Display position of knob
+            
+            
+        end
+
+        % Value changed function: Knob
+        function KnobValueChanged(app, event)
+            value = app.Knob.Value;
+            writePosition(app.servo,value/180) ; % move according to knob position
+        end
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Color = [0.6863 0.6824 0.749];
+            app.UIFigure.Position = [100 100 640 480];
+            app.UIFigure.Name = 'UI Figure';
+
+            % Create Knob
+            app.Knob = uiknob(app.UIFigure, 'continuous');
+            app.Knob.Limits = [0 180];
+            app.Knob.MajorTicks = [0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180];
+            app.Knob.ValueChangedFcn = createCallbackFcn(app, @KnobValueChanged, true);
+            app.Knob.ValueChangingFcn = createCallbackFcn(app, @KnobValueChanging, true);
+            app.Knob.MinorTicks = [5 15 25 35 45 55 65 75 85 95 105 115 125 135 145 155 165 175];
+            app.Knob.Position = [57 48 121 121];
+
+            % Create Lamp
+            app.Lamp = uilamp(app.UIFigure);
+            app.Lamp.Position = [261 298 20 20];
+            app.Lamp.Color = [1 0 0];
+
+            % Create Lamp2
+            app.Lamp2 = uilamp(app.UIFigure);
+            app.Lamp2.Position = [261 266 20 20];
+            app.Lamp2.Color = [1 1 0];
+
+            % Create Lamp3
+            app.Lamp3 = uilamp(app.UIFigure);
+            app.Lamp3.Position = [261 222 20 20];
+
+            % Create Switch
+            app.Switch = uiswitch(app.UIFigure, 'rocker');
+            app.Switch.ValueChangedFcn = createCallbackFcn(app, @SwitchValueChanged, true);
+            app.Switch.Position = [57 254 20 45];
+
+            % Create Switch2
+            app.Switch2 = uiswitch(app.UIFigure, 'rocker');
+            app.Switch2.ValueChangedFcn = createCallbackFcn(app, @Switch2ValueChanged, true);
+            app.Switch2.Position = [136 254 20 45];
+
+            % Create Image
+            app.Image = uiimage(app.UIFigure);
+            app.Image.Position = [301 142 332 220];
+            app.Image.ImageSource = 'c0.jpg';
+
+            % Create WelcomeLabel
+            app.WelcomeLabel = uilabel(app.UIFigure);
+            app.WelcomeLabel.FontName = 'Calibri';
+            app.WelcomeLabel.FontSize = 20;
+            app.WelcomeLabel.FontWeight = 'bold';
+            app.WelcomeLabel.FontColor = [1 0 0];
+            app.WelcomeLabel.Position = [40 383 203 27];
+            app.WelcomeLabel.Text = 'Welcome!';
+
+            % Create MySmartParkingDashboardLabel
+            app.MySmartParkingDashboardLabel = uilabel(app.UIFigure);
+            app.MySmartParkingDashboardLabel.FontName = 'Calibri';
+            app.MySmartParkingDashboardLabel.FontSize = 26;
+            app.MySmartParkingDashboardLabel.FontWeight = 'bold';
+            app.MySmartParkingDashboardLabel.Position = [148 409 324 43];
+            app.MySmartParkingDashboardLabel.Text = {'My Smart Parking Dashboard'; ''};
+
+            % Create AvailablespotsLabel
+            app.AvailablespotsLabel = uilabel(app.UIFigure);
+            app.AvailablespotsLabel.BackgroundColor = [0.8471 0.8275 0.9216];
+            app.AvailablespotsLabel.FontSize = 16;
+            app.AvailablespotsLabel.FontWeight = 'bold';
+            app.AvailablespotsLabel.Position = [17 348 132 22];
+            app.AvailablespotsLabel.Text = {'Available spots :'; ''};
+
+            % Create AvailablespotsEditField
+            app.AvailablespotsEditField = uieditfield(app.UIFigure, 'numeric');
+            app.AvailablespotsEditField.Limits = [0 14];
+            app.AvailablespotsEditField.FontSize = 14;
+            app.AvailablespotsEditField.BackgroundColor = [0.8471 0.8275 0.9216];
+            app.AvailablespotsEditField.Position = [148 348 51 22];
+
+            % Create EnterLabel
+            app.EnterLabel = uilabel(app.UIFigure);
+            app.EnterLabel.FontSize = 14;
+            app.EnterLabel.FontWeight = 'bold';
+            app.EnterLabel.Position = [57 208 41 22];
+            app.EnterLabel.Text = 'Enter';
+
+            % Create ExitLabel
+            app.ExitLabel = uilabel(app.UIFigure);
+            app.ExitLabel.FontSize = 14;
+            app.ExitLabel.FontWeight = 'bold';
+            app.ExitLabel.Position = [131 208 31 22];
+            app.ExitLabel.Text = 'Exit';
+
+            % Create DatePickerLabel
+            app.DatePickerLabel = uilabel(app.UIFigure);
+            app.DatePickerLabel.HorizontalAlignment = 'right';
+            app.DatePickerLabel.FontWeight = 'bold';
+            app.DatePickerLabel.Position = [324 73 71 22];
+            app.DatePickerLabel.Text = 'Date Picker';
+
+            % Create DatePicker
+            app.DatePicker = uidatepicker(app.UIFigure);
+            app.DatePicker.Position = [410 73 150 22];
+
+            % Create Label_4
+            app.Label_4 = uilabel(app.UIFigure);
+            app.Label_4.FontSize = 14;
+            app.Label_4.FontWeight = 'bold';
+            app.Label_4.Position = [116 11 40 22];
+            app.Label_4.Text = '0°';
+
+            % Create ProjectGroupNo34Label
+            app.ProjectGroupNo34Label = uilabel(app.UIFigure);
+            app.ProjectGroupNo34Label.FontWeight = 'bold';
+            app.ProjectGroupNo34Label.Position = [242 459 139 22];
+            app.ProjectGroupNo34Label.Text = 'Project Group No. =  34';
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = finale_project_with_comment
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            % Execute the startup function
+            runStartupFcn(app, @startupFcn)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end
